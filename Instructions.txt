@@ -1,0 +1,62 @@
+
+
+In order for your dive computer code to compile, you will
+need to install a few libraries into the Arduino IDE.
+These libraries are from Adfruit but you dont even have to
+go to the website to install them.  You can install them from
+within the Arduino IDE.
+
+The libraries we need are:
+
+SD
+SSD1306Ascii
+RTClib
+Adafruit_MPRLS
+
+
+All you need to do is, from the IDE, 
+choose (in the toolbar) Sketch -> Manage Libraries
+
+From the Library Manager type in the name of the library and then select or scroll through
+the available libraries until you find the exact name I have provided.
+Once you click on the desired library a little "Install" button will appear on the bottom
+right corner.  Press "Install" and it will do the rest.  Continue this process until you have
+installed all of the libraries above.
+
+
+You will also need to install the boards file from Adafruit.  We need to tell the IDE what board
+we are programming.  From the following link you can learn how to install the board file.
+
+https://learn.adafruit.com/add-boards-arduino-v164/setup
+
+I can significantly reduce the time and possible error by telling you to:
+
+Copy (CTRL-C) the following line
+
+https://adafruit.github.io/arduino-board-index/package_adafruit_index.json
+
+From the IDE, choose File -> Preferences
+
+Close to the bottom look for "Additional Boards Manager URLs:" and paste (CTRL-V) the line you copied above.
+Thats all in the Preferences so you can close it by choosing "ok".
+
+Now choose Tools -> Board: -> Boards Manager
+From the Board Manager type "Adafruit AVR Boards" into the search block.  Once you see the correct
+one, click on it and install it.  NOTE: There is another file that looks very similar to the one we 
+want so make sure you choose the "Adafruit AVR Boards" file.
+
+One last thing we have to do.  We need to tell the IDE what board we are using and what
+communications (COM) port to find it on.  
+So, choose Tools -> Board: -> Adafruit Boards -> Adafruit Feather 328P
+and choose Tools -> Port -> whatever port number the IDE sees your board on.
+
+Now if you look in the very bottom right corner of the IDE, you should see "Adafruit Feather 328P on COMXX"
+where XX is the com port your computer found the Feather 328P.
+
+Once the libraries and boards are installed and selected, you should be able compile the code by 
+clicking the checkmark (verify) in the IDE.  If it compiles correctly, you can upload the code
+into your dive computer by clicking on the arrow (upload).
+
+Good Luck!!
+
+
