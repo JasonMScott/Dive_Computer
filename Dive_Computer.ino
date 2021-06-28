@@ -31,6 +31,9 @@ Adafruit_MPRLS mpr = Adafruit_MPRLS(RESET_PIN, EOC_PIN);
 
 char daysOfTheWeek[7][12] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
 
+File file;
+File file2;
+
 const uint8_t OLED_I2C_ADDRESS = 0x3C;
 bool oled_is_present = false;
 unsigned long newTime = 0;
@@ -87,9 +90,19 @@ bool diveEndFlag = 0;
 long diveStartTime = 0;
 long diveEndTime = 0;
 float maxDepth = 0.0;
+int currentWaitTime = 0;  // minutes
+char endGroup = ' ';
+int diveDurationMin = 0;
+long diveDuration = 0;
+bool currentlyDiving = 0;
+long currentDiveTime = 0;
+long surfaceInterval = 0;
+bool runOnce = true;
+long garbage = 0;
+byte junk = 0;
+
 
 ////////////////////// SETUP /////////////////////////////////////////
-
 void setup() {
 
 	pinMode(BUTTON_A, INPUT_PULLUP);
@@ -144,7 +157,7 @@ void setup() {
 	// rtc.adjust(DateTime(2014, 1, 21, 3, 0, 0));
 	
 	
-	////////////////////// MPRLS sensor /////////////////////////////////////////
+	////////////////////// MPRLS sensor ///////////////////////////////////
 	if (! mpr.begin())
 	{
 		Serial.println("Press sensor failed");
@@ -166,6 +179,8 @@ void setup() {
 	
 	oled.setCursor(12, 0);
 	oled.print("FEET SW");
+	
+
 	
 }  // end void Setup()
 
@@ -198,7 +213,7 @@ void loop() {
 		}
 		if(abs(feet_SW) > 99.9)
 		{
-			feet_SW = -99.9;
+			feet_SW = 99.9;
 		}
 		oled.println(abs(feet_SW), 1);
 		oled.set1X();
@@ -208,6 +223,12 @@ void loop() {
 			logging = true;
 			if(diveStartFlag)
 			{
+				diveStartFlag = false;
+				diveEndFlag = true;
+				maxDepth = 0;
+				currentWaitTime = 0;
+				junk = 1;
+				
 				diveStartTime = now.unixtime();
 				unix2HMS(diveStartTime);
 				Serial.println();
@@ -215,8 +236,8 @@ void loop() {
 				Serial.print('\t');
 				Serial.print(hourFromUnix);
 				Serial.print(":");
-				//if(minuteFromUnix < 10) Serial.print("0");
-				Serial.print(minuteFromUnix, 2);
+				if(minuteFromUnix < 10) Serial.print("0");
+				Serial.print(minuteFromUnix);
 				Serial.print(":");
 				if(secondFromUnix < 10) Serial.print("0");
 				Serial.print(secondFromUnix);
@@ -229,8 +250,7 @@ void loop() {
 					Serial.println(" AM");
 				}
 				Serial.println();
-				diveStartFlag = false;
-				diveEndFlag = true;
+				
 				File dataFile = SD.open("datalog.txt", FILE_WRITE);
 				// if the file is available, write to it:
 				if (dataFile)
@@ -263,14 +283,15 @@ void loop() {
 			logging = false;
 			if(diveEndFlag)
 			{
+				junk = 2;
 				diveEndTime = now.unixtime();
 				diveStartFlag = true;
 				diveEndFlag = false;
-				long diveDuration = diveEndTime - diveStartTime;
+				diveDuration = diveEndTime - diveStartTime;
 				unix2HMS(diveEndTime);
 				Serial.println();
 				Serial.println("End of Dive");
-				Serial.print("Time:     ");
+				Serial.print("Time:      ");
 				Serial.print(hourFromUnix);
 				Serial.print(":");
 				if(minuteFromUnix < 10) Serial.print("0");
@@ -287,7 +308,7 @@ void loop() {
 					Serial.print(" AM");
 				}
 				Serial.println();
-				Serial.print("Duration  ");
+				Serial.print("Duration:  ");
 				unix2HMS(diveDuration);
 				Serial.print(hourFromUnix);
 				Serial.print(":");
@@ -296,10 +317,50 @@ void loop() {
 				Serial.print(":");
 				if(secondFromUnix < 10) Serial.print("0");
 				Serial.println(secondFromUnix);
-				Serial.print("Max       ");
+				Serial.print("Max:       ");
 				Serial.print(maxDepth);
 				Serial.println(" ft");
+				//Serial.println();
+				
+				file = SD.open("group.txt", FILE_READ);
+				unix2HMS(diveDuration);
+				if(secondFromUnix > 0 && minuteFromUnix == 0)
+				{
+					diveDurationMin = 1;
+				}
+				else
+				{
+					if(secondFromUnix > 0)
+					{
+						diveDurationMin = minuteFromUnix + 1;
+					}
+					else
+					{
+						diveDurationMin = minuteFromUnix;
+					}
+					
+				}
+				endGroup = readGroup(maxDepth, diveDurationMin);
+				file.close();
+
+				file2 = SD.open("surfint.txt", FILE_READ);
+				currentWaitTime = readInterval(endGroup, currentWaitTime);
+				file2.close();
+				
+				Serial.print("End Group: ");
+				Serial.println(endGroup);
+				
+				Serial.print("Wait Time: ");
+				Serial.print(currentWaitTime);
+				
+				oled.set2X();
+				oled.setCursor(67, 0);
+				oled.println(endGroup);
+				oled.set1X();
+				
 				Serial.println();
+				Serial.println();
+				
 				File dataFile = SD.open("datalog.txt", FILE_WRITE);
 				// if the file is available, write to it:
 				if (dataFile)
@@ -345,11 +406,65 @@ void loop() {
 
 	if(! digitalRead(BUTTON_A))
 	{
-		oldTime =newTime;
-		//Serial.println(F("A"));
-		oled.setCursor(0,1);
-		oled.print("A");
-		unix2HMS(10000);
+		oled.clear();
+		//oled.println("End of Dive");
+		//oled.print("Time:     ");
+		//unix2HMS(diveEndTime);
+		//oled.print(hourFromUnix);
+		//oled.print(":");
+		//oled.print(minuteFromUnix);
+		//oled.print(":");
+		//oled.print(secondFromUnix);
+		//if(now.isPM())
+		//{
+		//oled.print(" PM");
+		//}
+		//else
+		//{
+		//oled.print(" AM");
+		//}
+		//oled.println();
+		oled.print("Duration  ");
+		unix2HMS(diveDuration);
+		oled.print(hourFromUnix);
+		oled.print(":");
+		if(minuteFromUnix < 10) oled.print("0");
+		oled.print(minuteFromUnix);
+		oled.print(":");
+		if(secondFromUnix < 10) oled.print("0");
+		oled.println(secondFromUnix);
+		oled.print("Max Depth ");
+		oled.print(maxDepth);
+		oled.println(" ft");
+		oled.print("Group     ");
+		oled.println(endGroup);
+		oled.print("Wait Time ");
+		oled.print(currentWaitTime);
+		oled.print(" Min");
+		delay(4000);
+		oled.clear();
+		oled.setCursor(12, 0);
+		oled.print("FEET SW");
+		oled.setCursor(ClockPosX,ClockPosY);
+		if(now.hour() <= 9)
+		{
+			oled.print(" ");
+		}
+		oled.print(now.hour(), DEC);
+		oled.print(':');
+		oled.setCursor(ClockPosX + 17, ClockPosY);
+		if(now.minute() <= 9)
+		{
+			oled.print("0");
+		}
+		oled.print(now.minute(), DEC);
+		oled.print(':');
+		
+		//oldTime =newTime;
+		////Serial.println(F("A"));
+		//oled.setCursor(0,1);
+		//oled.print("A");
+		//unix2HMS(10000);
 	}
 	if(! digitalRead(BUTTON_B))
 	{
@@ -381,8 +496,48 @@ void loop() {
 
 	if ((newTime - oldTime2) > rtcQueryInterval)   // How often to query the real time clock (RTC)
 	{
-		oldTime2 = newTime;
 		updateClock();
+		oldTime2 = newTime;
+		
+		if(junk == 1)
+		{
+			runOnce = true;
+			oldTime2 = newTime;
+			currentDiveTime = now.unixtime() - diveStartTime;
+			unix2HMS(currentDiveTime);
+			oled.setCursor(80,0);
+			if(hourFromUnix <= 9) oled.print(" ");
+			oled.print(hourFromUnix);
+			oled.print(":");
+			if(minuteFromUnix < 10) oled.print("0");
+			oled.print(minuteFromUnix);
+			oled.print(":");
+			if(secondFromUnix < 10) oled.print("0");
+			oled.print(secondFromUnix);
+		}
+		if(junk == 2)
+		{
+			oldTime2 = newTime;
+			if(runOnce)
+			{
+				runOnce = false;
+				garbage = now.unixtime();
+				
+			}
+			//Serial.print(garbage); Serial.print(" + "); Serial.print(currentWaitTime * 60); Serial.print(" - "); Serial.print(now.unixtime()); Serial.print(" = ");
+			surfaceInterval = (garbage + (currentWaitTime * 60) - now.unixtime());
+			//Serial.println(surfaceInterval);
+			unix2HMS(surfaceInterval);
+			oled.setCursor(80,0);
+			if(hourFromUnix <= 9) oled.print(" ");
+			oled.print(hourFromUnix);
+			oled.print(":");
+			if(minuteFromUnix < 10) oled.print("0");
+			oled.print(minuteFromUnix);
+			oled.print(":");
+			if(secondFromUnix < 10) oled.print("0");
+			oled.print(secondFromUnix);
+		}
 	}
 
 	if ((newTime - oldTime3) > timeout3)
@@ -390,10 +545,10 @@ void loop() {
 		
 		oldTime3 = newTime;
 		
-		int value = analogRead(A6);
-		float batteryVoltage = mapfloat(value, 0, 648, 0, 4.20);
-		oled.setCursor(105, 0);
-		oled.print(batteryVoltage);
+		//int value = analogRead(A6);
+		//float batteryVoltage = mapfloat(value, 0, 648, 0, 4.20);
+		//oled.setCursor(105, 0);
+		//oled.print(batteryVoltage);
 		
 		if(logging)
 		{
@@ -424,7 +579,7 @@ void loop() {
 			dataString += String(now.second());
 			dataString += String('\t');
 			//dataString += String("Battery Voltage = ");
-			dataString += String(batteryVoltage, 4);
+			//dataString += String(batteryVoltage, 4);
 			dataString += String('\t');
 			dataString += String(pressure_PSI, 4);
 			dataString += String('\t');
@@ -474,20 +629,6 @@ void updateClock()
 {
 
 	now = rtc.now();
-	
-	
-	//Serial.print(now.unixtime());
-	//Serial.print('\t');
-	//Serial.print(hourFromUnix);
-	//Serial.print(":");
-	//Serial.print(minuteFromUnix);
-	//Serial.print(":");
-	//Serial.print(secondFromUnix);
-	//Serial.print('\t');
-	//HMS2Unix(hourFromUnix, minuteFromUnix, secondFromUnix);
-	//Serial.println(unixFromHMS);
-	
-	
 	
 	if(now.hour() != oldHour)
 	{
@@ -559,4 +700,90 @@ void unix2HMS(long unixTime)
 void HMS2Unix(byte hour, byte minute, byte second)
 {
 	unixFromHMS = (hour * 3600) + (minute * 60) + second;
+}
+
+
+/////////////////////////////////////////////////////////////
+bool readLine(File &f, char* line, size_t maxLen) {
+	for (size_t n = 0; n < maxLen; n++) {
+		int c = f.read();
+		if ( c < 0 && n == 0) return false;  // EOF
+		if (c < 0 || c == '\n') {
+			line[n] = 0;
+			return true;
+		}
+		line[n] = c;
+	}
+	return false; // line too long
+}
+
+
+/////////////////////////////////////////////////////////////
+char readGroup(float maxDepth, long* diveDuration)
+{
+	long maxDepthLong = roundNum(maxDepth);
+	char line[32], *ptr, *str;
+	char letterGroup = '@';
+	readLine(file, line, sizeof(line));
+	while(strtol(line, &ptr, 10) != maxDepthLong)
+	{
+		readLine(file, line, sizeof(line));
+	}
+	while(strtol(ptr, &str, 10) < diveDuration)
+	{
+		while (*ptr)
+		{
+			if (*ptr++ == ',') break;
+		}
+		letterGroup++;
+	}
+	return letterGroup;
+}
+
+
+/////////////////////////////////////////////////////////////
+int readInterval(char groupMem, int& durationMem)
+{
+	int number = int(groupMem - 64);
+	
+	int waitTime = 0;
+	char line[30], *ptr, *str;
+	while(number > 0)
+	{
+		readLine(file2, line, sizeof(line));
+		number--;
+	}
+	long temp = strtol(line, &ptr, 10);
+	
+	while(temp <= durationMem)
+	{
+		while (*ptr)
+		{
+			if (*ptr++ == ',') break;
+		}
+		temp = strtol(ptr, &str, 10);
+	}
+	
+	return temp;
+}
+
+
+/////////////////////////////////////////////////////////////
+long roundNum(float maxDepth)
+{
+	// Serial.print(maxDepth);
+	long D = 0;
+	if(maxDepth > 90) D = 100;
+	else if(maxDepth > 80) D = 90;
+	else if(maxDepth > 70) D = 80;
+	else if(maxDepth > 60) D = 70;
+	else if(maxDepth > 50) D = 60;
+	else if(maxDepth > 40) D = 50;
+	else if(maxDepth > 35) D = 40;
+	else
+	{
+		D = 35;
+	}
+	maxDepth = D;
+	return maxDepth;
 }
