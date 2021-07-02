@@ -1,6 +1,6 @@
 /*
 Name:       Dive_Computer.ino
-Created:	5/27/2021 1:41:00 PM
+Created:  5/27/2021 1:41:00 PM
 Author:     Jason Scott
 */
 
@@ -92,533 +92,593 @@ long diveEndTime = 0;
 float maxDepth = 0.0;
 int currentWaitTime = 0;  // minutes
 char endGroup = ' ';
+char currentGroup = ' ';
+char startGroup = ' ';
 int diveDurationMin = 0;
 long diveDuration = 0;
 bool currentlyDiving = 0;
 long currentDiveTime = 0;
 long surfaceInterval = 0;
 bool runOnce = true;
-long garbage = 0;
+long timeNow = 0;
 byte junk = 0;
+long resNTime = 0;
+long durationMem = 0;
 
 
 ////////////////////// SETUP /////////////////////////////////////////
 void setup() {
 
-	pinMode(BUTTON_A, INPUT_PULLUP);
-	pinMode(BUTTON_B, INPUT_PULLUP);
-	pinMode(BUTTON_C, INPUT_PULLUP);
+  pinMode(BUTTON_A, INPUT_PULLUP);
+  pinMode(BUTTON_B, INPUT_PULLUP);
+  pinMode(BUTTON_C, INPUT_PULLUP);
 
-	pinMode(A0, INPUT);
+  pinMode(A0, INPUT);
 
-	Serial.begin(9600);
+  Serial.begin(9600);
 
-	////////////////////// OLED /////////////////////////////////////////
-	delay(1000);  // delay for OLED to boot before issuing commands
-	Wire.begin();
-	Wire.setClock(400000L);
-	Wire.beginTransmission(OLED_I2C_ADDRESS);
-	if (Wire.endTransmission() == 0) {        // OLED is present
-		oled_is_present = true;
-		oled.begin(&Adafruit128x32,OLED_I2C_ADDRESS);
-		oled.setFont(System5x7);
-		Serial.println("OLED Initialized");
-		oled.println("OLED Initialized");
-	}
-	else{
-		Serial.println("OLED not found");
-		oled.println("OLED not found");
-	}
+  ////////////////////// OLED /////////////////////////////////////////
+  delay(1000);  // delay for OLED to boot before issuing commands
+  Wire.begin();
+  Wire.setClock(400000L);
+  Wire.beginTransmission(OLED_I2C_ADDRESS);
+  if (Wire.endTransmission() == 0) {        // OLED is present
+    oled_is_present = true;
+    oled.begin(&Adafruit128x32,OLED_I2C_ADDRESS);
+    oled.setFont(System5x7);
+    //Serial.println("OLED Initialized");
+    //oled.println("OLED Initialized");
+  }
+  else{
+    //Serial.println("OLED not found");
+    //oled.println("OLED not found");
+  }
 
-	////////////////////// SD CARD /////////////////////////////////////////
-	if (!SD.begin(chipSelect)) {
-		Serial.println("SD card not found");
-		oled.println("SD card not found");
-	}
-	else{
-		Serial.println("SD card initialized");
-		oled.println("SD card initialized");
-	}
-	
-	////////////////////// RTC /////////////////////////////////////////
-	if (! rtc.begin()) {
-		Serial.println("RTC not found");
-		oled.println("RTC not found");
-	}
-	else{
-		Serial.println("RTC initialized");
-		oled.println("RTC initialized");
-	}
-	// When time needs to be set on a new device, or after a power loss, the
-	// following line sets the RTC to the date & time this sketch was compiled
-	// rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
-	// This line sets the RTC with an explicit date & time, for example to set
-	// January 21, 2014 at 3am you would call:
-	// rtc.adjust(DateTime(2014, 1, 21, 3, 0, 0));
-	
-	
-	////////////////////// MPRLS sensor ///////////////////////////////////
-	if (! mpr.begin())
-	{
-		Serial.println("Press sensor failed");
-		oled.println("Press sensor failed");
-	}
-	else
-	{
-		Serial.println("Press sensor initialized");
-		oled.println("Press sensor initialized");
-	}
+  ////////////////////// SD CARD /////////////////////////////////////////
+  if (!SD.begin(chipSelect)) {
+    //Serial.println("SD card not found");
+    //oled.println("SD card not found");
+  }
+  else{
+    //Serial.println("SD card initialized");
+    //oled.println("SD card initialized");
+  }
+  
+  ////////////////////// RTC /////////////////////////////////////////
+  if (! rtc.begin()) {
+    //Serial.println("RTC not found");
+    //oled.println("RTC not found");
+  }
+  else{
+    //Serial.println("RTC initialized");
+    //oled.println("RTC initialized");
+  }
+  // When time needs to be set on a new device, or after a power loss, the
+  // following line sets the RTC to the date & time this sketch was compiled
+  // rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+  // This line sets the RTC with an explicit date & time, for example to set
+  // January 21, 2014 at 3am you would call:
+  // rtc.adjust(DateTime(2014, 1, 21, 3, 0, 0));
+  
+  
+  ////////////////////// MPRLS sensor ///////////////////////////////////
+  if (! mpr.begin())
+  {
+    //Serial.println("Press sensor failed");
+    //oled.println("Press sensor failed");
+  }
+  else
+  {
+    //Serial.println("Press sensor initialized");
+    //oled.println("Press sensor initialized");
+  }
 
-	initial_pressure_hPa = mpr.readPressure();
-	//initial_pressure_PSI = initial_pressure_hPa / 68.947572932;
-	
-	
-	////////////////////// Misc stuff /////////////////////////////////////////
-	delay(1000);
-	oled.clear();
-	
-	oled.setCursor(12, 0);
-	oled.print("FEET SW");
-	
+  initial_pressure_hPa = mpr.readPressure();
+  //initial_pressure_PSI = initial_pressure_hPa / 68.947572932;
+  
+  
+  ////////////////////// Misc stuff /////////////////////////////////////////
+  delay(1000);
+  oled.clear();
+  
+  oled.setCursor(12, 0);
+  oled.print("FEET SW");
+  
 
-	
+  
 }  // end void Setup()
 
 
 ////////////////////// MAIN /////////////////////////////////////////
 void loop() {
 
-	newTime = millis();
+  newTime = millis();
 
-	if ((newTime - oldTime5) > timeout5)  // Pressure Sensor
-	{
-		oldTime5 = newTime;
-		float pressure_hPa = mpr.readPressure() - initial_pressure_hPa;
-		pressure_PSI = pressure_hPa / 68.947572932;
-		
-		pressure_PSI = pressure_PSI * 4;		// FOR SCALING ONLY !!!!!!!!
-		
-		feet_SW = pressure_PSI / 0.445;
-		if(abs(feet_SW) > maxDepth)
-		{
-			maxDepth = abs(feet_SW);
-		}
-		oled.set2X();
-		oled.setCursor(10, 2);
-		if(abs(feet_SW) < 10.0)
-		{
-			oled.setCursor(10, 2);
-			oled.print(" ");
-			oled.setCursor(20, 2);
-		}
-		if(abs(feet_SW) > 99.9)
-		{
-			feet_SW = 99.9;
-		}
-		oled.println(abs(feet_SW), 1);
-		oled.set1X();
-		
-		if((abs(feet_SW) > 2))
-		{
-			logging = true;
-			if(diveStartFlag)
-			{
-				diveStartFlag = false;
-				diveEndFlag = true;
-				maxDepth = 0;
-				currentWaitTime = 0;
-				junk = 1;
-				
-				diveStartTime = now.unixtime();
-				unix2HMS(diveStartTime);
-				Serial.println();
-				Serial.print("Start of Dive");
-				Serial.print('\t');
-				Serial.print(hourFromUnix);
-				Serial.print(":");
-				if(minuteFromUnix < 10) Serial.print("0");
-				Serial.print(minuteFromUnix);
-				Serial.print(":");
-				if(secondFromUnix < 10) Serial.print("0");
-				Serial.print(secondFromUnix);
-				if(now.isPM())
-				{
-					Serial.println(" PM");
-				}
-				else
-				{
-					Serial.println(" AM");
-				}
-				Serial.println();
-				
-				File dataFile = SD.open("datalog.txt", FILE_WRITE);
-				// if the file is available, write to it:
-				if (dataFile)
-				{
-					dataFile.println();
-					dataFile.print("Start of Dive");
-					dataFile.print('\t');
-					dataFile.print(hourFromUnix);
-					dataFile.print(":");
-					if(minuteFromUnix < 10) dataFile.print("0");
-					dataFile.print(minuteFromUnix);
-					dataFile.print(":");
-					if(secondFromUnix < 10) dataFile.print("0");
-					dataFile.print(secondFromUnix);
-					if(now.isPM())
-					{
-						dataFile.println(" PM");
-					}
-					else
-					{
-						dataFile.println(" AM");
-					}
-					dataFile.println();
-					dataFile.close();
-				}
-			}
-		}
-		else
-		{
-			logging = false;
-			if(diveEndFlag)
-			{
-				junk = 2;
-				diveEndTime = now.unixtime();
-				diveStartFlag = true;
-				diveEndFlag = false;
-				diveDuration = diveEndTime - diveStartTime;
-				unix2HMS(diveEndTime);
-				Serial.println();
-				Serial.println("End of Dive");
-				Serial.print("Time:      ");
-				Serial.print(hourFromUnix);
-				Serial.print(":");
-				if(minuteFromUnix < 10) Serial.print("0");
-				Serial.print(minuteFromUnix);
-				Serial.print(":");
-				if(secondFromUnix < 10) Serial.print("0");
-				Serial.print(secondFromUnix);
-				if(now.isPM())
-				{
-					Serial.print(" PM");
-				}
-				else
-				{
-					Serial.print(" AM");
-				}
-				Serial.println();
-				Serial.print("Duration:  ");
-				unix2HMS(diveDuration);
-				Serial.print(hourFromUnix);
-				Serial.print(":");
-				if(minuteFromUnix < 10) Serial.print("0");
-				Serial.print(minuteFromUnix);
-				Serial.print(":");
-				if(secondFromUnix < 10) Serial.print("0");
-				Serial.println(secondFromUnix);
-				Serial.print("Max:       ");
-				Serial.print(maxDepth);
-				Serial.println(" ft");
-				//Serial.println();
-				
-				file = SD.open("group.txt", FILE_READ);
-				unix2HMS(diveDuration);
-				if(secondFromUnix > 0 && minuteFromUnix == 0)
-				{
-					diveDurationMin = 1;
-				}
-				else
-				{
-					if(secondFromUnix > 0)
-					{
-						diveDurationMin = minuteFromUnix + 1;
-					}
-					else
-					{
-						diveDurationMin = minuteFromUnix;
-					}
-					
-				}
-				endGroup = readGroup(maxDepth, diveDurationMin);
-				file.close();
-
-				file2 = SD.open("surfint.txt", FILE_READ);
-				currentWaitTime = readInterval(endGroup, currentWaitTime);
-				file2.close();
-				
-				Serial.print("End Group: ");
-				Serial.println(endGroup);
-				
-				Serial.print("Wait Time: ");
-				Serial.print(currentWaitTime);
-				
-				oled.set2X();
-				oled.setCursor(67, 0);
-				oled.println(endGroup);
-				oled.set1X();
-				
-				Serial.println();
-				Serial.println();
-				
-				File dataFile = SD.open("datalog.txt", FILE_WRITE);
-				// if the file is available, write to it:
-				if (dataFile)
-				{
-					dataFile.println();
-					dataFile.println("End of Dive");
-					dataFile.print("Time:     ");
-					unix2HMS(diveEndTime);
-					dataFile.print(hourFromUnix);
-					dataFile.print(":");
-					dataFile.print(minuteFromUnix);
-					dataFile.print(":");
-					dataFile.print(secondFromUnix);
-					if(now.isPM())
-					{
-						dataFile.print(" PM");
-					}
-					else
-					{
-						dataFile.print(" AM");
-					}
-					dataFile.println();
-					dataFile.print("Duration  ");
-					unix2HMS(diveDuration);
-					dataFile.print(hourFromUnix);
-					dataFile.print(":");
-					if(minuteFromUnix < 10) dataFile.print("0");
-					dataFile.print(minuteFromUnix);
-					dataFile.print(":");
-					if(secondFromUnix < 10) dataFile.print("0");
-					dataFile.println(secondFromUnix);
-					dataFile.print("Max       ");
-					dataFile.print(maxDepth);
-					dataFile.println(" ft");
-					dataFile.println();
-					dataFile.close();
-				}
-			}
-		}
-	}
-	
+  if ((newTime - oldTime5) > timeout5)  // Pressure Sensor
+  {
+    oldTime5 = newTime;
+    float pressure_hPa = mpr.readPressure() - initial_pressure_hPa;
+    pressure_PSI = pressure_hPa / 68.947572932;
+    
+    pressure_PSI = pressure_PSI * 4;    // FOR SCALING ONLY !!!!!!!!
+    
+    feet_SW = pressure_PSI / 0.445;
+    if(abs(feet_SW) > maxDepth)
+    {
+      maxDepth = abs(feet_SW);
+    }
+    oled.set2X();
+    oled.setCursor(10, 2);
+    if(abs(feet_SW) < 10.0)
+    {
+      oled.setCursor(10, 2);
+      oled.print(" ");
+      oled.setCursor(20, 2);
+    }
+    if(abs(feet_SW) > 99.9)
+    {
+      feet_SW = 99.9;
+    }
+    oled.println(abs(feet_SW), 1);
+    oled.set1X();
 
 
-	if(! digitalRead(BUTTON_A))
-	{
-		oled.clear();
-		//oled.println("End of Dive");
-		//oled.print("Time:     ");
-		//unix2HMS(diveEndTime);
-		//oled.print(hourFromUnix);
-		//oled.print(":");
-		//oled.print(minuteFromUnix);
-		//oled.print(":");
-		//oled.print(secondFromUnix);
-		//if(now.isPM())
-		//{
-		//oled.print(" PM");
-		//}
-		//else
-		//{
-		//oled.print(" AM");
-		//}
-		//oled.println();
-		oled.print("Duration  ");
-		unix2HMS(diveDuration);
-		oled.print(hourFromUnix);
-		oled.print(":");
-		if(minuteFromUnix < 10) oled.print("0");
-		oled.print(minuteFromUnix);
-		oled.print(":");
-		if(secondFromUnix < 10) oled.print("0");
-		oled.println(secondFromUnix);
-		oled.print("Max Depth ");
-		oled.print(maxDepth);
-		oled.println(" ft");
-		oled.print("Group     ");
-		oled.println(endGroup);
-		oled.print("Wait Time ");
-		oled.print(currentWaitTime);
-		oled.print(" Min");
-		delay(4000);
-		oled.clear();
-		oled.setCursor(12, 0);
-		oled.print("FEET SW");
-		oled.setCursor(ClockPosX,ClockPosY);
-		if(now.hour() <= 9)
-		{
-			oled.print(" ");
-		}
-		oled.print(now.hour(), DEC);
-		oled.print(':');
-		oled.setCursor(ClockPosX + 17, ClockPosY);
-		if(now.minute() <= 9)
-		{
-			oled.print("0");
-		}
-		oled.print(now.minute(), DEC);
-		oled.print(':');
-		
-		//oldTime =newTime;
-		////Serial.println(F("A"));
-		//oled.setCursor(0,1);
-		//oled.print("A");
-		//unix2HMS(10000);
-	}
-	if(! digitalRead(BUTTON_B))
-	{
-		oldTime = newTime;
-		//Serial.println(F("B"));
-		oled.setCursor(0,2);
-		oled.print("B");
-		unix2HMS(800);
-	}
-	if(! digitalRead(BUTTON_C))
-	{
-		oldTime = newTime;
-		//Serial.println(F("C"));
-		oled.setCursor(0,3);
-		oled.print("C");
-		unix2HMS(1234);
-	}
+    
+    if((abs(feet_SW) > 2))    ////////////// Start of Dive ////////////////
+    {
+      logging = true;
+      
+      if(diveStartFlag)
+      {
+        diveStartFlag = false;
+        diveEndFlag = true;
+        maxDepth = 0;
+        currentWaitTime = 0;
+        junk = 1;
+        durationMem = 0;
+        startGroup = currentGroup;
+        
+        diveStartTime = now.unixtime();
+        unix2HMS(diveStartTime);
+        //Serial.println();
+        //Serial.print("Start of Dive");
+        //Serial.print('\t');
+        //Serial.print(hourFromUnix);
+        //Serial.print(":");
+        //if(minuteFromUnix < 10) Serial.print("0");
+        //Serial.print(minuteFromUnix);
+        //Serial.print(":");
+        //if(secondFromUnix < 10) Serial.print("0");
+        //Serial.print(secondFromUnix);
+        //if(now.isPM())
+        //{
+          //Serial.println(" PM");
+        //}
+        //else
+        //{
+          //Serial.println(" AM");
+        //}
+        //Serial.println();
+        
+        File dataFile = SD.open("datalog.txt", FILE_WRITE);
+        // if the file is available, write to it:
+        if (dataFile)
+        {
+          dataFile.println();
+          dataFile.print("Start of Dive");
+          dataFile.print('\t');
+          dataFile.print(hourFromUnix);
+          dataFile.print(":");
+          if(minuteFromUnix < 10) dataFile.print("0");
+          dataFile.print(minuteFromUnix);
+          dataFile.print(":");
+          if(secondFromUnix < 10) dataFile.print("0");
+          dataFile.print(secondFromUnix);
+          if(now.isPM())
+          {
+            dataFile.println(" PM");
+          }
+          else
+          {
+            dataFile.println(" AM");
+          }
+          dataFile.println();
+          dataFile.close();
+        }
+      }
+    }
+    else            ////////////////////// End of Dive ///////////////////////
+    {
+      logging = false;
+      if(diveEndFlag)
+      {
+        junk = 2;
+        diveEndTime = now.unixtime();
+        diveStartFlag = true;
+        diveEndFlag = false;
+        diveDuration = diveEndTime - diveStartTime;
+        unix2HMS(diveEndTime);
+        //Serial.println();
+        //Serial.println("End of Dive");
+        //Serial.print("Time:      ");
+        //Serial.print(hourFromUnix);
+        //Serial.print(":");
+        //if(minuteFromUnix < 10) Serial.print("0");
+        //Serial.print(minuteFromUnix);
+        //Serial.print(":");
+        //if(secondFromUnix < 10) Serial.print("0");
+        //Serial.print(secondFromUnix);
+        //if(now.isPM())
+        //{
+          //Serial.print(" PM");
+        //}
+        //else
+        //{
+          //Serial.print(" AM");
+        //}
+        //Serial.println();
+        //Serial.print("Duration:  ");
+        //unix2HMS(diveDuration);
+        //Serial.print(hourFromUnix);
+        //Serial.print(":");
+        //if(minuteFromUnix < 10) Serial.print("0");
+        //Serial.print(minuteFromUnix);
+        //Serial.print(":");
+        //if(secondFromUnix < 10) Serial.print("0");
+        //Serial.println(secondFromUnix);
+        //Serial.print("Max:       ");
+        //Serial.print(maxDepth);
+        //Serial.println(" ft");
+        //Serial.println();
+        
+        
+        unix2HMS(diveDuration);
+        if(secondFromUnix > 0 && minuteFromUnix == 0)
+        {
+          diveDurationMin = 1;
+        }
+        else
+        {
+          if(secondFromUnix > 0)
+          {
+            diveDurationMin = minuteFromUnix + 1;
+          }
+          else
+          {
+            diveDurationMin = minuteFromUnix;
+          }
+          
+        }       
+          
+        if(startGroup == ' ')
+        {
+            
+        }           
+        else
+        {
+           file = SD.open("group.txt", FILE_READ);
+           resNTime = getRNT(maxDepth, startGroup);
+           //Serial.println(resNTime);
+           file.close();           
+        }
+        long adjResNTime = resNTime + diveDurationMin;  
+        file = SD.open("group.txt", FILE_READ);   
+        endGroup = readGroup(maxDepth, adjResNTime);
+        file.close();
+        //Serial.println(endGroup);
+        currentGroup = endGroup;
+        
+        file2 = SD.open("surfint.txt", FILE_READ);
+        int nextInterval = readInterval(endGroup, currentWaitTime);
+        currentWaitTime = nextInterval - durationMem;
+        durationMem = nextInterval;
+        file2.close();
+        
+        //Serial.print("End Group: ");
+        //Serial.println(endGroup);
+        //
+        //Serial.print("Wait Time: ");
+        //Serial.print(currentWaitTime);
+        
+        oled.set2X();
+        oled.setCursor(67, 0);
+        oled.println(endGroup);
+        oled.set1X();
+        
+        //Serial.println();
+        //Serial.println();
+        
+        File dataFile = SD.open("datalog.txt", FILE_WRITE);
+        // if the file is available, write to it:
+        if (dataFile)
+        {
+          dataFile.println();
+          dataFile.println("End of Dive");
+          dataFile.print("Time:     ");
+          unix2HMS(diveEndTime);
+          dataFile.print(hourFromUnix);
+          dataFile.print(":");
+          dataFile.print(minuteFromUnix);
+          dataFile.print(":");
+          dataFile.print(secondFromUnix);
+          if(now.isPM())
+          {
+            dataFile.print(" PM");
+          }
+          else
+          {
+            dataFile.print(" AM");
+          }
+          dataFile.println();
+          dataFile.print("Duration  ");
+          unix2HMS(diveDuration);
+          dataFile.print(hourFromUnix);
+          dataFile.print(":");
+          if(minuteFromUnix < 10) dataFile.print("0");
+          dataFile.print(minuteFromUnix);
+          dataFile.print(":");
+          if(secondFromUnix < 10) dataFile.print("0");
+          dataFile.println(secondFromUnix);
+          dataFile.print("Max       ");
+          dataFile.print(maxDepth);
+          dataFile.println(" ft");
+          dataFile.println();
+          dataFile.close();
+        }
+      }
+      else
+      {
+        junk = 2;
+        if(surfaceInterval <= 0 && currentGroup > 'A')
+        {          
+          currentGroup--;
+          oled.set2X();
+          oled.setCursor(67, 0);
+          oled.println(currentGroup);
+          oled.set1X();
+          file2 = SD.open("surfint.txt", FILE_READ);
+          int nextInterval = readInterval(endGroup, durationMem);
+          //Serial.println(nextInterval);
+          currentWaitTime = nextInterval - durationMem;
+          durationMem = nextInterval;
+          file2.close();
+          runOnce = true;
+        }
+        else if(surfaceInterval <= 0 && currentGroup == 'A')
+        {
+            currentGroup = ' ';
+            endGroup = ' ';
+            currentWaitTime = 0;
+            durationMem = 0;
+            resNTime = 0;
+            oled.set2X();
+            oled.setCursor(67, 0);
+            oled.println(currentGroup);
+            oled.set1X();            
+        }          
+      }
+    }
+  }
 
-	if ((newTime - oldTime) > timeout)  // Blanking for A, B, C
-	{
-		oldTime = newTime;
-		oled.setCursor(0, 1);
-		oled.print(" ");
-		oled.setCursor(0, 2);
-		oled.print(" ");
-		oled.setCursor(0, 3);
-		oled.print(" ");
-	}
+  if(! digitalRead(BUTTON_A))
+  {
+    oled.clear();
+    //oled.println("End of Dive");
+    //oled.print("Time:     ");
+    //unix2HMS(diveEndTime);
+    //oled.print(hourFromUnix);
+    //oled.print(":");
+    //oled.print(minuteFromUnix);
+    //oled.print(":");
+    //oled.print(secondFromUnix);
+    //if(now.isPM())
+    //{
+    //oled.print(" PM");
+    //}
+    //else
+    //{
+    //oled.print(" AM");
+    //}
+    //oled.println();
+    oled.print("Duration  ");
+    unix2HMS(diveDuration);
+    oled.print(hourFromUnix);
+    oled.print(":");
+    if(minuteFromUnix < 10) oled.print("0");
+    oled.print(minuteFromUnix);
+    oled.print(":");
+    if(secondFromUnix < 10) oled.print("0");
+    oled.println(secondFromUnix);
+    oled.print("Max Depth ");
+    oled.print(maxDepth);
+    oled.println(" ft");
+    oled.print("Group     ");
+    oled.println(endGroup);
+    oled.print("Wait Time ");
+    oled.print(currentWaitTime);
+    oled.print(" Min");
+    delay(4000);
+    
+    oled.clear();
+    oled.setCursor(12, 0);
+    oled.print("FEET SW");
+    oled.setCursor(ClockPosX,ClockPosY);
+    if(now.hour() <= 9)
+    {
+      oled.print(" ");
+    }
+    oled.print(now.hour(), DEC);
+    oled.print(':');
+    oled.setCursor(ClockPosX + 17, ClockPosY);
+    if(now.minute() <= 9)
+    {
+      oled.print("0");
+    }
+    oled.print(now.minute(), DEC);
+    oled.print(':');
+    
+    //oldTime =newTime;
+    ////Serial.println(F("A"));
+    //oled.setCursor(0,1);
+    //oled.print("A");
+    //unix2HMS(10000);
+  }
+  //if(! digitalRead(BUTTON_B))
+  //{
+    //oldTime = newTime;
+    ////Serial.println(F("B"));
+    //oled.setCursor(0,2);
+    //oled.print("B");
+    //unix2HMS(800);
+  //}
+  //if(! digitalRead(BUTTON_C))
+  //{
+    //oldTime = newTime;
+    ////Serial.println(F("C"));
+    //oled.setCursor(0,3);
+    //oled.print("C");
+    //unix2HMS(1234);
+  //}
 
-	if ((newTime - oldTime2) > rtcQueryInterval)   // How often to query the real time clock (RTC)
-	{
-		updateClock();
-		oldTime2 = newTime;
-		
-		if(junk == 1)
-		{
-			runOnce = true;
-			oldTime2 = newTime;
-			currentDiveTime = now.unixtime() - diveStartTime;
-			unix2HMS(currentDiveTime);
-			oled.setCursor(80,0);
-			if(hourFromUnix <= 9) oled.print(" ");
-			oled.print(hourFromUnix);
-			oled.print(":");
-			if(minuteFromUnix < 10) oled.print("0");
-			oled.print(minuteFromUnix);
-			oled.print(":");
-			if(secondFromUnix < 10) oled.print("0");
-			oled.print(secondFromUnix);
-		}
-		if(junk == 2)
-		{
-			oldTime2 = newTime;
-			if(runOnce)
-			{
-				runOnce = false;
-				garbage = now.unixtime();
-				
-			}
-			//Serial.print(garbage); Serial.print(" + "); Serial.print(currentWaitTime * 60); Serial.print(" - "); Serial.print(now.unixtime()); Serial.print(" = ");
-			surfaceInterval = (garbage + (currentWaitTime * 60) - now.unixtime());
-			//Serial.println(surfaceInterval);
-			unix2HMS(surfaceInterval);
-			oled.setCursor(80,0);
-			if(hourFromUnix <= 9) oled.print(" ");
-			oled.print(hourFromUnix);
-			oled.print(":");
-			if(minuteFromUnix < 10) oled.print("0");
-			oled.print(minuteFromUnix);
-			oled.print(":");
-			if(secondFromUnix < 10) oled.print("0");
-			oled.print(secondFromUnix);
-		}
-	}
+  //if ((newTime - oldTime) > timeout)  // Blanking for A, B, C
+  //{
+    //oldTime = newTime;
+    //oled.setCursor(0, 1);
+    //oled.print(" ");
+    //oled.setCursor(0, 2);
+    //oled.print(" ");
+    //oled.setCursor(0, 3);
+    //oled.print(" ");
+  //}
 
-	if ((newTime - oldTime3) > timeout3)
-	{
-		
-		oldTime3 = newTime;
-		
-		//int value = analogRead(A6);
-		//float batteryVoltage = mapfloat(value, 0, 648, 0, 4.20);
-		//oled.setCursor(105, 0);
-		//oled.print(batteryVoltage);
-		
-		if(logging)
-		{
-			// make a string for assembling the data to log:
-			String dataString = "";
-			dataString += String(now.month());
-			dataString += String("/");
-			if(now.day() <= 9)
-			{
-				dataString += String("0");
-			}
-			dataString += String(now.day());
-			dataString += String("/");
-			dataString += String(now.year());
-			dataString += String('\t');
-			dataString += String(now.hour());
-			dataString += String(":");
-			if(now.minute() <= 9)
-			{
-				dataString += String("0");
-			}
-			dataString += String(now.minute());
-			dataString += String(":");
-			if(now.second() <= 9)
-			{
-				dataString += String("0");
-			}
-			dataString += String(now.second());
-			dataString += String('\t');
-			//dataString += String("Battery Voltage = ");
-			//dataString += String(batteryVoltage, 4);
-			dataString += String('\t');
-			dataString += String(pressure_PSI, 4);
-			dataString += String('\t');
-			dataString += String(feet_SW, 4);
-			
-			// open the file. Note that only one file can be open at a time,
-			// so you have to close this one before opening another.
-			File dataFile = SD.open("datalog.txt", FILE_WRITE);
-			// if the file is available, write to it:
-			if (dataFile)
-			{
-				dataFile.println(dataString);
-				dataFile.close();
-				// print to the serial port too:
-				//Serial.println(dataString);
-				oled.setCursor(85, 1);
-				oled.print("log");
-				flag = 1;
-			}
-			// if the file isn't open, pop up an error:
-			else
-			{
-				Serial.println(F("error opening datalog.txt"));
-			}
-		}
-		
-	}
+  if ((newTime - oldTime2) > rtcQueryInterval || runOnce)   // How often to query the real time clock (RTC)
+  {
+    updateClock();
+    oldTime2 = newTime;
+    
+    if(junk == 1)
+    {
+      runOnce = true;
+      oldTime2 = newTime;
+      currentDiveTime = now.unixtime() - diveStartTime;
+      unix2HMS(currentDiveTime);
+      oled.setCursor(80,0);
+      if(hourFromUnix <= 9) oled.print(" ");
+      oled.print(hourFromUnix);
+      oled.print(":");
+      if(minuteFromUnix < 10) oled.print("0");
+      oled.print(minuteFromUnix);
+      oled.print(":");
+      if(secondFromUnix < 10) oled.print("0");
+      oled.print(secondFromUnix);
+    }
+    if(junk == 2)
+    {
+      oldTime2 = newTime;
+      if(runOnce)
+      {
+        runOnce = false;
+        timeNow = now.unixtime();       
+      }
+      //Serial.print(garbage); Serial.print(" + "); Serial.print(currentWaitTime * 60); Serial.print(" - "); Serial.print(now.unixtime()); Serial.print(" = ");
+      surfaceInterval = (timeNow + (currentWaitTime * 60) - now.unixtime());
+      if(surfaceInterval <= 0)
+      {
+        surfaceInterval = 0;
+      }
+      //Serial.println(surfaceInterval);
+      unix2HMS(surfaceInterval);
+      oled.setCursor(80,0);
+      if(hourFromUnix <= 9) oled.print(" ");
+      oled.print(hourFromUnix);
+      oled.print(":");
+      if(minuteFromUnix < 10) oled.print("0");
+      oled.print(minuteFromUnix);
+      oled.print(":");
+      if(secondFromUnix < 10) oled.print("0");
+      oled.print(secondFromUnix);
+    }
+  }
 
-	if(flag)  // Blanking of "log"
-	{
-		oldTime4++;
-		if(oldTime4 > timeout4)
-		{
-			flag = 0;
-			oldTime4 = 0;
-			oled.setCursor(85, 1);
-			oled.print("   ");
-		}
-	}
+  if ((newTime - oldTime3) > timeout3)
+  {
+    
+    oldTime3 = newTime;
+    
+    //int value = analogRead(A6);
+    //float batteryVoltage = mapfloat(value, 0, 648, 0, 4.20);
+    //oled.setCursor(105, 0);
+    //oled.print(batteryVoltage);
+    
+    //if(logging)
+    //{
+      //// make a string for assembling the data to log:
+      //String dataString = "";
+      //dataString += String(now.month());
+      //dataString += String("/");
+      //if(now.day() <= 9)
+      //{
+        //dataString += String("0");
+      //}
+      //dataString += String(now.day());
+      //dataString += String("/");
+      //dataString += String(now.year());
+      //dataString += String('\t');
+      //dataString += String(now.hour());
+      //dataString += String(":");
+      //if(now.minute() <= 9)
+      //{
+        //dataString += String("0");
+      //}
+      //dataString += String(now.minute());
+      //dataString += String(":");
+      //if(now.second() <= 9)
+      //{
+        //dataString += String("0");
+      //}
+      //dataString += String(now.second());
+      //dataString += String('\t');
+      ////dataString += String("Battery Voltage = ");
+      ////dataString += String(batteryVoltage, 4);
+      //dataString += String('\t');
+      //dataString += String(pressure_PSI, 4);
+      //dataString += String('\t');
+      //dataString += String(feet_SW, 4);
+      //
+      //// open the file. Note that only one file can be open at a time,
+      //// so you have to close this one before opening another.
+      //File dataFile = SD.open("datalog.txt", FILE_WRITE);
+      //// if the file is available, write to it:
+      //if (dataFile)
+      //{
+        //dataFile.println(dataString);
+        //dataFile.close();
+        //// print to the serial port too:
+        ////Serial.println(dataString);
+        //oled.setCursor(85, 1);
+        //oled.print("log");
+        //flag = 1;
+      //}
+      //// if the file isn't open, pop up an error:
+      //else
+      //{
+        //Serial.println(F("error opening datalog.txt"));
+      //}
+    //}
+    //
+  }
+
+  if(flag)  // Blanking of "log"
+  {
+    oldTime4++;
+    if(oldTime4 > timeout4)
+    {
+      flag = 0;
+      oldTime4 = 0;
+      oled.setCursor(85, 1);
+      oled.print("   ");
+    }
+  }
 
 
 }  // end void loop
@@ -628,162 +688,187 @@ void loop() {
 void updateClock()
 {
 
-	now = rtc.now();
-	
-	if(now.hour() != oldHour)
-	{
-		oldHour = now.hour();
-		oled.setCursor(ClockPosX,ClockPosY);
-		if(now.hour() <= 9)
-		{
-			oled.print(" ");
-		}
-		oled.print(now.hour(), DEC);
-		oled.print(':');
-	}
+  now = rtc.now();
+  
+  if(now.hour() != oldHour)
+  {
+    oldHour = now.hour();
+    oled.setCursor(ClockPosX,ClockPosY);
+    if(now.hour() <= 9)
+    {
+      oled.print(" ");
+    }
+    oled.print(now.hour(), DEC);
+    oled.print(':');
+  }
 
-	if(now.minute() != oldMinute)
-	{
-		oldMinute = now.minute();
-		oled.setCursor(ClockPosX + 17, ClockPosY);
-		if(now.minute() <= 9)
-		{
-			oled.print("0");
-		}
-		oled.print(now.minute(), DEC);
-		oled.print(':');
-	}
+  if(now.minute() != oldMinute)
+  {
+    oldMinute = now.minute();
+    oled.setCursor(ClockPosX + 17, ClockPosY);
+    if(now.minute() <= 9)
+    {
+      oled.print("0");
+    }
+    oled.print(now.minute(), DEC);
+    oled.print(':');
+  }
 
-	if(now.second() != oldSeconds)
-	{
-		oldSeconds = now.second();
-		oled.setCursor(ClockPosX + 35, ClockPosY);
-		if(now.second() <= 9)
-		{
-			oled.print("0");
-		}
-		oled.print(now.second(), DEC);
-	}
+  if(now.second() != oldSeconds)
+  {
+    oldSeconds = now.second();
+    oled.setCursor(ClockPosX + 35, ClockPosY);
+    if(now.second() <= 9)
+    {
+      oled.print("0");
+    }
+    oled.print(now.second(), DEC);
+  }
 } // end void updateClock()
 
 
 /////////////////////////////////////////////////////////////
 float mapfloat(float x, float in_min, float in_max, float out_min, float out_max)
 {
-	return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+  return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
 }
 
 
 /////////////////////////////////////////////////////////////
 void countDownTimer(int hour, int min, int sec)
 {
-	now = rtc.now();
-	
-	futureHour = now.hour() + hour;
-	
-	futureMinute = now.minute() + min;
-	
-	futureSecond = now.second() + sec;
+  now = rtc.now();
+  
+  futureHour = now.hour() + hour;
+  
+  futureMinute = now.minute() + min;
+  
+  futureSecond = now.second() + sec;
 }
 
 
 /////////////////////////////////////////////////////////////
 void unix2HMS(long unixTime)
 {
-	secondFromUnix = unixTime%60; unixTime /= 60;
-	minuteFromUnix = unixTime%60; unixTime /= 60;
-	hourFromUnix   = unixTime%24; unixTime /= 24;
+  secondFromUnix = unixTime%60; unixTime /= 60;
+  minuteFromUnix = unixTime%60; unixTime /= 60;
+  hourFromUnix   = unixTime%24; unixTime /= 24;
 }
 
 
 /////////////////////////////////////////////////////////////
 void HMS2Unix(byte hour, byte minute, byte second)
 {
-	unixFromHMS = (hour * 3600) + (minute * 60) + second;
+  unixFromHMS = (hour * 3600) + (minute * 60) + second;
 }
 
 
 /////////////////////////////////////////////////////////////
 bool readLine(File &f, char* line, size_t maxLen) {
-	for (size_t n = 0; n < maxLen; n++) {
-		int c = f.read();
-		if ( c < 0 && n == 0) return false;  // EOF
-		if (c < 0 || c == '\n') {
-			line[n] = 0;
-			return true;
-		}
-		line[n] = c;
-	}
-	return false; // line too long
+  for (size_t n = 0; n < maxLen; n++) {
+    int c = f.read();
+    if ( c < 0 && n == 0) return false;  // EOF
+    if (c < 0 || c == '\n') {
+      line[n] = 0;
+      return true;
+    }
+    line[n] = c;
+  }
+  return false; // line too long
 }
 
 
 /////////////////////////////////////////////////////////////
 char readGroup(float maxDepth, long* diveDuration)
 {
-	long maxDepthLong = roundNum(maxDepth);
-	char line[32], *ptr, *str;
-	char letterGroup = '@';
-	readLine(file, line, sizeof(line));
-	while(strtol(line, &ptr, 10) != maxDepthLong)
-	{
-		readLine(file, line, sizeof(line));
-	}
-	while(strtol(ptr, &str, 10) < diveDuration)
-	{
-		while (*ptr)
-		{
-			if (*ptr++ == ',') break;
-		}
-		letterGroup++;
-	}
-	return letterGroup;
+  long maxDepthLong = roundNum(maxDepth);
+  char line[32], *ptr, *str;
+  char letterGroup = '@';
+  readLine(file, line, sizeof(line));
+  while(strtol(line, &ptr, 10) != maxDepthLong)
+  {
+    readLine(file, line, sizeof(line));
+  }
+  while(strtol(ptr, &str, 10) < diveDuration)
+  {
+    while (*ptr)
+    {
+      if (*ptr++ == ',') break;
+    }
+    letterGroup++;
+  }
+  return letterGroup;
 }
 
 
 /////////////////////////////////////////////////////////////
-int readInterval(char groupMem, int& durationMem)
+int readInterval(char groupMem, int durationMem)
 {
-	int number = int(groupMem - 64);
-	
-	int waitTime = 0;
-	char line[30], *ptr, *str;
-	while(number > 0)
-	{
-		readLine(file2, line, sizeof(line));
-		number--;
-	}
-	long temp = strtol(line, &ptr, 10);
-	
-	while(temp <= durationMem)
-	{
-		while (*ptr)
-		{
-			if (*ptr++ == ',') break;
-		}
-		temp = strtol(ptr, &str, 10);
-	}
-	
-	return temp;
+  int number = int(groupMem - 64);
+  
+  int waitTime = 0;
+  char line[30], *ptr, *str;
+  while(number > 0)
+  {
+    readLine(file2, line, sizeof(line));
+    number--;
+  }
+  long temp = strtol(line, &ptr, 10);
+  
+  while(temp <= durationMem)
+  {
+    while (*ptr)
+    {
+      if (*ptr++ == ',') break;
+    }
+    temp = strtol(ptr, &str, 10);
+  }
+  
+  return temp;
 }
 
 
 /////////////////////////////////////////////////////////////
 long roundNum(float maxDepth)
 {
-	// Serial.print(maxDepth);
-	long D = 0;
-	if(maxDepth > 90) D = 100;
-	else if(maxDepth > 80) D = 90;
-	else if(maxDepth > 70) D = 80;
-	else if(maxDepth > 60) D = 70;
-	else if(maxDepth > 50) D = 60;
-	else if(maxDepth > 40) D = 50;
-	else if(maxDepth > 35) D = 40;
-	else
-	{
-		D = 35;
-	}
-	maxDepth = D;
-	return maxDepth;
+  // Serial.print(maxDepth);
+  long D = 0;
+  if(maxDepth > 90) D = 100;
+  else if(maxDepth > 80) D = 90;
+  else if(maxDepth > 70) D = 80;
+  else if(maxDepth > 60) D = 70;
+  else if(maxDepth > 50) D = 60;
+  else if(maxDepth > 40) D = 50;
+  else if(maxDepth > 35) D = 40;
+  else
+  {
+    D = 35;
+  }
+  maxDepth = D;
+  return maxDepth;
+}
+
+long getRNT(float maxDepth, char sGroup )
+{
+  long maxDepthLong = roundNum(maxDepth);
+  char line[32], *ptr, *str;
+  long num2return = 0;
+  readLine(file, line, sizeof(line));
+  while(strtol(line, &ptr, 10) != maxDepthLong)
+  {
+    readLine(file, line, sizeof(line));
+  }
+  
+  while( sGroup != '@')
+  {
+    
+    while (*ptr)
+    {
+      if (*ptr++ == ',') break;
+    }
+    num2return = strtol(ptr, &str, 10);
+    sGroup--;
+  }
+  return num2return;
+
 }
