@@ -200,7 +200,7 @@ void loop() {
     float pressure_hPa = mpr.readPressure() - initial_pressure_hPa;
     pressure_PSI = pressure_hPa / 68.947572932;
     
-    pressure_PSI = pressure_PSI * 4;    // FOR SCALING ONLY !!!!!!!!
+    pressure_PSI = pressure_PSI * 10;    // FOR SCALING ONLY !!!!!!!!
     
     feet_SW = pressure_PSI / 0.445;
     if(abs(feet_SW) > maxDepth)
@@ -346,8 +346,7 @@ void loop() {
           else
           {
             diveDurationMin = minuteFromUnix;
-          }
-          
+          }          
         }       
           
         if(startGroup == ' ')
@@ -516,6 +515,11 @@ void loop() {
     }
     oled.print(now.minute(), DEC);
     oled.print(':');
+
+    oled.set2X();
+    oled.setCursor(67, 0);
+    oled.println(endGroup);
+    oled.set1X();
     
     //oldTime =newTime;
     ////Serial.println(F("A"));
