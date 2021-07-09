@@ -1,7 +1,9 @@
 /*
-  Name:       Dive_Computer.ino
+  Name:     Dive_Computer.ino
+  Ver:      1.0
   Created:  5/27/2021 1:41:00 PM
-  Author:     Jason Scott
+  Modified: 7/09/2021
+  Author:   Jason Scott
 */
 
 #include <SPI.h>
@@ -181,7 +183,7 @@ void setup() {
 
 
   ////////////////////// Misc stuff /////////////////////////////////////////
-  delay(500);
+  delay(400);
   oled.clear();
 
   oled.setCursor(12, 0);
@@ -264,8 +266,6 @@ void loop() {
         durationMem = 0;
         startGroup = currentGroup;
 
-
-
         diveStartTime = now.unixtime();
         unix2HMS(diveStartTime);
         //Serial.println();
@@ -326,7 +326,6 @@ void loop() {
         oled.print("Go to Surface");
         //delay(100);
       }
-
     }
 
     else            ////////////////////// End of Dive ///////////////////////
